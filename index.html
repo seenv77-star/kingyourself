@@ -2112,9 +2112,7 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
       </div>
     </div>
 
-    <!-- Netlify Forms: 배포하면 제출 내용은 사이트 관리자(정예나 코치)만 볼 수 있어요 -->
-    <form class="apply-form" name="consult" method="POST" data-netlify="true" netlify-honeypot="company" enctype="multipart/form-data" novalidate data-apply-form>
-      <input type="hidden" name="form-name" value="consult">
+    <form class="apply-form" name="consult" method="POST" action="/api/consult" enctype="multipart/form-data" novalidate data-apply-form>
       <p class="hp" aria-hidden="true"><label>회사 <input name="company" tabindex="-1" autocomplete="off"></label></p>
 
       <ol class="af-steps" aria-label="신청 단계">
@@ -2181,7 +2179,7 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
 
         <div class="field">
           <label for="capture">대화 캡처 <span class="opt">선택</span></label>
-          <input id="capture" name="capture" type="file" accept="image/*">
+          <input id="capture" name="capture" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
           <p class="help">상대의 말투와 흐름을 더 정확하게 볼 수 있어요. <br>이름과 사진은 가려서 올려 주세요.</p>
         </div>
         <div class="af-actions"><button type="button" class="btn btn-ghost" data-prev>이전</button><button type="button" class="btn btn-pearl" data-next>다음</button></div>
@@ -2635,7 +2633,7 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
 <script>/* =========================================================
    KY연애코칭 (KING YOURSELF) — 사이트 동작
    - 카카오톡 채널 주소는 아래 CONFIG.kakaoChannel 하나만 바꾸면 모든 버튼에 적용돼요.
-   - 상담 신청 폼은 Netlify Forms로 전송돼요(배포 시 사이트 관리자만 열람 가능 = 비공개).
+   - 상담 신청 폼은 같은 사이트의 비공개 접수 API로 전송돼요.
    - GSAP가 없거나 '동작 줄이기' 설정이면 모든 내용이 처음부터 그대로 보여요.
    ========================================================= */
 (function () {
@@ -2847,7 +2845,7 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
   }
   function qaClose(goTo) {
     if (!qaOpenNow) return;
-    var done = function () {
+    var done = function (receiptValues) {
       qaView.classList.remove("is-open");
       qaList.forEach(function (a) { a.classList.remove("is-on"); });
       document.body.style.overflow = "";
@@ -2984,25 +2982,69 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
       "닉네임: " + $("#nickname").value.trim(), "희망 시간: " + $("#when").value, "홈페이지에서 사연을 비공개로 작성했어요."].join("\n");
   }
 
+  var submissionId;
+  var challengeScript;
+  ["input", "change"].forEach(function (eventName) {
+    form.addEventListener(eventName, function () { submissionId = undefined; });
+  });
+
+  async function getChallengeToken() {
+    var configResponse = await fetch(form.action, { signal: AbortSignal.timeout(8000) });
+    if (!configResponse.ok) throw new Error("unavailable");
+    var config = await configResponse.json();
+    if (!challengeScript) {
+      challengeScript = new Promise(function (resolve, reject) {
+        var script = document.createElement("script");
+        script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        var timer = setTimeout(fail, 8000);
+        function fail() { clearTimeout(timer); script.remove(); reject(new Error("challenge")); }
+        script.onload = function () { clearTimeout(timer); resolve(); };
+        script.onerror = fail;
+        document.head.appendChild(script);
+      }).catch(function (error) { challengeScript = undefined; throw error; });
+    }
+    await challengeScript;
+    var slot = document.createElement("div");
+    form.appendChild(slot);
+    var widget;
+    var timer;
+    try {
+      return await new Promise(function (resolve, reject) {
+        function fail() { reject(new Error("challenge")); }
+        timer = setTimeout(fail, 12000);
+        widget = window.turnstile.render(slot, {
+          sitekey: config.siteKey, action: "consult", execution: "execute",
+          "response-field": false, callback: resolve,
+          "error-callback": fail, "expired-callback": fail, "timeout-callback": fail
+        });
+        window.turnstile.execute(widget);
+      });
+    } finally {
+      clearTimeout(timer);
+      if (widget !== undefined) window.turnstile.remove(widget);
+      slot.remove();
+    }
+  }
+
   form.addEventListener("submit", function (e) {
     e.preventDefault();
-    if (!validate(2)) return;
+    var btn = $("[data-submit]", form);
+    if (btn.disabled || stepIdx !== 2) return;
+    for (var i = 0; i < steps.length; i++) {
+      if (!validate(i)) { goStep(i, false); validate(i); return; }
+    }
     var sendErr = $('[data-err="send"]', form);
     sendErr.hidden = true;
-    var btn = $("[data-submit]", form);
     btn.disabled = true; btn.textContent = "보내는 중";
-    lastSummary = summary();
-    var preview = location.protocol === "file:" || /claude|localhost|127\.0\.0\.1/.test(location.hostname);
-    var done = function (isPreview) {
+    var submittedSummary = summary();
+    var done = function () {
       var head = $("[data-apply-head]"), ok = $("[data-apply-done]");
-      if (isPreview) { var dt = $("[data-done-text]"); if (!dt.dataset.preview) { dt.dataset.preview = "1"; dt.textContent = "미리보기 화면이라 실제로 전송되지는 않았어요. 배포하면 이 단계에서 사연이 비공개로 전달돼요. " + dt.textContent; } }
       var rows = [["상담", "plan"], ["스타일", "style"], ["고민 유형", "topic"], ["닉네임", "nickname"], ["희망 시간", "when"]];
       var list = $("[data-receipt-list]");
       list.innerHTML = "";
       rows.forEach(function (r) {
-        var el = $('[name="' + r[1] + '"]:checked', form) || $('[name="' + r[1] + '"]', form);
         var d = document.createElement("div"), dt = document.createElement("dt"), dd = document.createElement("dd");
-        dt.textContent = r[0]; dd.textContent = el ? el.value : ""; d.appendChild(dt); d.appendChild(dd); list.appendChild(d);
+        dt.textContent = r[0]; dd.textContent = receiptValues[r[1]] || ""; d.appendChild(dt); d.appendChild(dd); list.appendChild(d);
       });
       var receipt = $("[data-apply-receipt]");
       form.hidden = true; receipt.hidden = false;
@@ -3016,15 +3058,35 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
       } else { head.hidden = true; ok.hidden = false; ok.focus(); }
       $("#apply").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
     };
-    if (preview) { setTimeout(function () { done(true); }, 500); return; }
-    fetch("/", { method: "POST", body: new FormData(form) })
-      .then(function (res) { if (!res.ok) throw new Error(res.status); done(false); })
-      .catch(function () {
-        copyText(lastSummary);
-        sendErr.textContent = "사연을 보내지 못했어요. 인터넷 연결을 확인하고 다시 보내 주세요. 계속 안 되면 카카오톡 채널로 문의해 주세요. 신청 내용은 복사해 두었어요.";
-        sendErr.hidden = false;
-        btn.disabled = false; btn.textContent = "비공개로 사연 보내기";
+    var body = new FormData(form);
+    var capture = body.get("capture");
+    var receiptValues = Object.fromEntries(body);
+    Promise.resolve().then(async function () {
+      var id = submissionId || (submissionId = crypto.randomUUID());
+      if (capture && capture.size > 1024 * 1024) throw new Error("size");
+      if (capture && capture.size && !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(capture.type)) {
+        throw new Error("image");
+      }
+      var token = await getChallengeToken();
+      var response = await fetch(form.action, {
+        method: "POST", body: body, signal: AbortSignal.timeout(20000),
+        headers: { "Idempotency-Key": id, "X-Turnstile-Token": token }
       });
+      var result = await response.json();
+      if (!response.ok || result.ok !== true) throw new Error(result.code || "unavailable");
+      lastSummary = submittedSummary;
+      done(receiptValues);
+    }).catch(function (error) {
+      var messages = {
+        size: "첨부 이미지는 1MB 이하로 올려 주세요.",
+        image: "PNG, JPG, WebP 또는 GIF 이미지를 올려 주세요.",
+        field: "입력값을 확인해 주세요. 사연은 20~10,000자, 닉네임과 연락처는 120자 이내로 입력해 주세요.",
+        challenge: "보안 확인이 완료되지 않았어요. 잠시 후 다시 보내 주세요."
+      };
+      sendErr.textContent = messages[error.message] || "사연을 보내지 못했어요. 잠시 후 다시 시도해 주세요. 계속 안 되면 카카오톡 채널로 문의해 주세요.";
+      sendErr.hidden = false;
+      btn.disabled = false; btn.textContent = "비공개로 사연 보내기";
+    });
   });
 
   /* =========================================================
