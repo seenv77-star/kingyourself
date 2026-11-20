@@ -5,7 +5,7 @@
 1. Cloudflare의 Workers & Pages에서 Pages 프로젝트를 만들고 GitHub의 `seenv77-star/kingyourself`를 연결합니다. GitHub 앱 접근 범위는 해당 저장소로 설정합니다.
 2. 검증용 생산 브랜치는 `cloudflare-migration`으로 설정합니다. 프레임워크 설정은 None, 빌드 명령은 `node scripts/prepare-pages.mjs`, 출력 디렉터리는 `dist`입니다. 이 명령은 HTML을 복사하고 API 경로만 지정합니다. Preview 자동 배포는 검증에 필요한 브랜치가 생길 때 설정합니다.
 3. Free 플랜의 검증용 D1을 만들고 `migrations/0001_consultations.sql`을 적용합니다. Pages의 Production 환경에 `CONSULT_DB`라는 D1 바인딩으로 연결합니다.
-4. 검증 주소 호스트를 허용하는 Invisible 모드 Turnstile 위젯을 생성합니다. Pages에 `TURNSTILE_SITE_KEY`를 변수로, `TURNSTILE_SECRET`과 무작위 32바이트 이상의 `CONSULT_ADMIN_TOKEN`을 암호화된 시크릿으로 추가하고 재배포합니다.
+4. 검증 주소 호스트를 허용하는 테스트용 Managed 모드 Turnstile 위젯을 생성합니다. 운영에서 Invisible 모드를 사용할 경우 Cloudflare Turnstile Privacy Addendum을 개인정보 처리방침에 명시해야 합니다. Pages에 `TURNSTILE_SITE_KEY`를 변수로, `TURNSTILE_SECRET`과 무작위 32바이트 이상의 `CONSULT_ADMIN_TOKEN`을 암호화된 시크릿으로 추가하고 재배포합니다.
 5. PC·모바일에서 메뉴, 단계 전환, 카카오 링크, 접수, 실패 시 폼 유지, 중복 재시도 및 관리자 접근을 가상 데이터로 검증합니다. 1MB 이하 PNG/JPEG/WebP/GIF와 제한 초과, 변조 파일도 확인합니다. 가상 데이터를 삭제하고 GitHub 커밋으로 자동 배포를 확인합니다.
 
 ## 관리자 운영
