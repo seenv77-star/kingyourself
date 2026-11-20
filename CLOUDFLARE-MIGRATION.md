@@ -28,3 +28,7 @@
 - 승인된 전환 창에서 운영용 D1과 Turnstile을 구성합니다. 호스트 허용 목록에 루트와 www를 포함합니다. 기존 Netlify 자동 배포를 고정한 뒤 검증한 변경을 main에 병합하고 Pages 생산 브랜치를 main으로 변경합니다. Pages 배포 성공을 확인한 뒤 도메인을 전환합니다.
 - 전파 중 기존 Netlify Forms와 새 D1 양쪽의 접수 여부를 확인합니다. Netlify 프로젝트와 기존 DNS 백업을 유지하고 장애 시 기존 DNS와 Netlify 경로를 복구합니다.
 - 운영 도메인의 HTTPS, 상담 폼, 카카오 채널, 메일 레코드와 자동 배포를 검증합니다. 이후 Claude Code에서 GitHub main에 반영한 커밋은 Pages에서 자동 배포됩니다.
+
+## 운영 배포 확인
+
+Pages 운영 브랜치는 `main`입니다. DNS 전환 전 Pages 배포 목록에서 `main`의 최신 커밋이 Production으로 성공했는지 확인합니다.
