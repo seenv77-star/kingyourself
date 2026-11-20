@@ -19,7 +19,7 @@
   ```
 - 이미지는 `GET /api/consult-attachment?id=<접수 UUID>`에 `Authorization: Bearer <관리자 시크릿>` 헤더를 보내 다운로드합니다. 시크릿은 비밀번호 관리자에 보관하고 HTTP 도구에서 비공개 변수로 전달합니다. URL, 저장소, 콘솔 명령 기록에 시크릿을 넣지 않습니다.
 - 최초 만료일은 접수일로부터 1년입니다. 상담을 진행할 때 관리자가 마지막 상담일 기준으로 `expires_at`을 갱신합니다. 삭제 요청은 해당 신청의 UUID를 확인한 뒤 `DELETE FROM consultations WHERE id = '<UUID>';`로 처리합니다. D1 Time Travel에 남는 복구 이력에는 플랫폼 보존 기간이 적용되므로 복원 시 삭제를 다시 반영합니다.
-- 별도의 Free Worker에 `ops/retention-worker.js`를 배포하고 같은 D1을 `CONSULT_DB`에 묶은 뒤 매시간 Cron Trigger(`0 * * * *`)를 걸어 만료 데이터를 삭제합니다. HTTP 공개 경로는 비활성화합니다. 운영 전 Cron의 실행과 실제 삭제를 검증합니다.
+- 별도의 Free Worker는 `npx wrangler deploy --config ops/wrangler.jsonc`로 배포합니다. 설정 파일은 운영 D1 바인딩과 매시간 Cron Trigger(`0 * * * *`)를 지정하고 공개 HTTP 주소를 비활성화합니다. 운영 전 Cron의 실행과 실제 삭제를 검증합니다.
 - 상담 신청 응답과 첨부에는 캐시를 사용하지 않습니다. 요청 본문과 인증 헤더를 수집하는 로깅·추적 규칙을 활성화하지 않습니다.
 
 ## 운영 전환과 복구
