@@ -3084,6 +3084,7 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
         field: "입력값을 확인해 주세요. 사연은 20~10,000자, 닉네임과 연락처는 120자 이내로 입력해 주세요.",
         challenge: "보안 확인이 완료되지 않았어요. 잠시 후 다시 보내 주세요."
       };
+      sendErr.dataset.failure = ["size", "image", "field", "challenge", "upload_read", "verify_unavailable", "storage_unavailable", "unavailable", "duplicate"].includes(error.message) ? error.message : "transport";
       sendErr.textContent = messages[error.message] || "사연을 보내지 못했어요. 잠시 후 다시 시도해 주세요. 계속 안 되면 카카오톡 채널로 문의해 주세요.";
       sendErr.hidden = false;
       btn.disabled = false; btn.textContent = "비공개로 사연 보내기";

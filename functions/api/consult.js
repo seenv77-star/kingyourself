@@ -63,6 +63,7 @@ export async function onRequestPost({ request, env }) {
   if (!token || token.length > 2048) return reply(403, { code: "challenge" });
   if (!env.CONSULT_DB || !env.TURNSTILE_SECRET) return reply(503, { code: "unavailable" });
 
+  let failure = "upload_read";
   try {
     const form = await readForm(request);
     if (form instanceof Response) return form;
@@ -89,6 +90,7 @@ export async function onRequestPost({ request, env }) {
     const mime = bytes ? imageType(new Uint8Array(bytes)) : null;
     if ((file?.name && !bytes) || (bytes && (!mime || mime !== file.type))) return reply(415, { code: "image" });
 
+    failure = "verify_unavailable";
     const verification = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
       body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token }),
@@ -100,6 +102,7 @@ export async function onRequestPost({ request, env }) {
       return reply(403, { code: "challenge" });
     }
 
+    failure = "storage_unavailable";
     const payload = JSON.stringify(fields);
     const imageHash = bytes ? [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].join(",") : "";
     const fingerprint = [...new Uint8Array(await crypto.subtle.digest("SHA-256",
@@ -117,6 +120,6 @@ export async function onRequestPost({ request, env }) {
       ? reply(200, { ok: true })
       : reply(409, { code: "duplicate" });
   } catch {
-    return reply(503, { code: "unavailable" });
+    return reply(503, { code: failure });
   }
 }
