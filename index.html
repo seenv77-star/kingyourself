@@ -3060,6 +3060,7 @@ html.tone-js .qa-view:has(.qa:target):not(.is-open) { display: none; }
     };
     var body = new FormData(form);
     var capture = body.get("capture");
+    if (capture && !capture.name && !capture.size) body.delete("capture");
     var receiptValues = Object.fromEntries(body);
     Promise.resolve().then(async function () {
       var id = submissionId || (submissionId = crypto.randomUUID());

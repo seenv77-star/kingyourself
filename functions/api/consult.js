@@ -82,7 +82,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     const uploads = form.getAll("capture");
-    const file = uploads[0];
+    const file = uploads[0] === "" ? undefined : uploads[0];
     if (uploads.length > 1 || typeof file === "string") return reply(415, { code: "image" });
     if (file?.size > maxFile) return reply(413, { code: "size" });
     const bytes = file?.size ? await file.arrayBuffer() : null;
