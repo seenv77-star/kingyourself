@@ -1,3 +1,5 @@
+import { consultationExpiry } from "../_shared/retention.js";
+
 const maxFile = 1024 * 1024;
 const maxBody = maxFile + 64 * 1024;
 const idPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
@@ -108,17 +110,23 @@ export async function onRequestPost({ request, env }) {
     const fingerprint = [...new Uint8Array(await crypto.subtle.digest("SHA-256",
       new TextEncoder().encode(JSON.stringify([id, payload, mime, imageHash]))))].join(",");
     const now = new Date();
-    const expires = new Date(now);
-    expires.setUTCFullYear(expires.getUTCFullYear() + 1);
+    const expires = consultationExpiry(now, env.CONSULT_RETENTION_DAYS);
     const db = env.CONSULT_DB.withSession("first-primary");
-    const result = await db.prepare(
-      "INSERT INTO consultations (id, fingerprint, received_at, expires_at, payload, mime, capture) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
-    ).bind(id, fingerprint, now.toISOString(), expires.toISOString(), payload, mime, bytes).run();
-    if (result.meta.changes === 1) return reply(201, { ok: true });
-    const existing = await db.prepare("SELECT fingerprint FROM consultations WHERE id = ?").bind(id).first();
-    return existing?.fingerprint === fingerprint
-      ? reply(200, { ok: true })
-      : reply(409, { code: "duplicate" });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const random = crypto.getRandomValues(new Uint8Array(8));
+      const code = "KY-" + Array.from(random, value => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+      const result = await db.prepare(
+        "INSERT INTO consultations (id, fingerprint, received_at, expires_at, payload, mime, capture, consultation_code, consent_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
+      ).bind(id, fingerprint, now.toISOString(), expires, payload, mime, bytes, code, "site-v1").run();
+      if (result.meta.changes === 1) return reply(201, { ok: true, consultationId: code });
+      const existing = await db.prepare("SELECT fingerprint, consultation_code, expires_at FROM consultations WHERE id = ?").bind(id).first();
+      if (existing) {
+        return existing.fingerprint === fingerprint && existing.expires_at > now.toISOString()
+          ? reply(200, { ok: true, consultationId: existing.consultation_code })
+          : reply(409, { code: "duplicate" });
+      }
+    }
+    return reply(503, { code: "storage_unavailable" });
   } catch {
     return reply(503, { code: failure });
   }
